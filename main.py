@@ -163,6 +163,11 @@ class SnusbaseSearchModal(ui.Modal):
 
 # --- INTERFACES : VIEWS ---
 
+class AdvancedMenuView(ui.View):
+    @ui.button(label="Lancer la recherche", style=discord.ButtonStyle.grey, emoji="🚀")
+    async def launch_search(self, interaction: discord.Interaction, button: ui.Button):
+        await interaction.response.send_modal(AdvancedSearchModal())
+
 class SnusbaseMenuView(ui.View):
     @ui.select(placeholder="Sélectionne un type de recherche...", options=[
         discord.SelectOption(label="Détection auto", emoji="➡️"),
@@ -208,7 +213,12 @@ class MainMenuSelect(ui.Select):
     async def callback(self, interaction: discord.Interaction):
         val = self.values[0]
         if val == "Advanced":
-            await interaction.response.send_modal(AdvancedSearchModal())
+            emb = discord.Embed(
+                title="==============================\n      🚀 ADVANCED S€ARCH\n==============================", 
+                description="[+] Recherche locale par filtres\n[+] Prénom · Nom · Ville\n[+] Scan profond des bases de données", 
+                color=0x2b2d31
+            )
+            await interaction.response.send_message(embed=emb, view=AdvancedMenuView(), ephemeral=True)
         elif val == "FiveM":
             emb = discord.Embed(title="==============================\n      FIVEM S€ARCHER\n==============================", description="[+] Plusieurs types de recherche\n[+] Username · Steam · Discord\n[+] License · IP", color=0x2b2d31)
             await interaction.response.send_message(embed=emb, view=FiveMMenuView(), ephemeral=True)
@@ -220,7 +230,6 @@ class MainMenuSelect(ui.Select):
         elif val == "Legion":
             user_id = str(interaction.user.id)
             user_credits = credit_system.get(user_id, {}).get("balance", 0)
-            
             embed = discord.Embed(
                 title="==============================\n      🪐 PROJECT LEGION\n==============================",
                 description=(
@@ -238,15 +247,12 @@ class MainMenuSelect(ui.Select):
             embed.set_footer(text="Legion S€archer • Système de recherche avancé")
             embed.set_thumbnail(url=interaction.user.display_avatar.url)
             await interaction.response.send_message(embed=embed, ephemeral=True)
-        else:
-            await interaction.response.send_message(f"Outil {val} sélectionné.", ephemeral=True)
 
 # --- COMMANDES BOT ---
 
 @bot.event
 async def on_ready():
     print(f'{Fore.CYAN}Legion Bot est en ligne !{Style.RESET_ALL}')
-    await bot.change_presence(activity=discord.Streaming(name="Legion S€archer", url="https://twitch.tv/discord"))
 
 @bot.command()
 async def panel(ctx):
