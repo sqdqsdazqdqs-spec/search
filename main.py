@@ -17,6 +17,7 @@ colorama.init()
 TOKEN = os.getenv('DISCORD_TOKEN') or 'TON_TOKEN_ICI'
 
 intents = discord.Intents.all()
+intents.presences = True # IMPORTANT : Requis pour lire les statuts
 bot = commands.Bot(command_prefix='!', intents=intents)
 bot.remove_command('help')
 
@@ -24,10 +25,35 @@ bot.remove_command('help')
 AUTHORIZED_IDS = [1402199337240625193, 1445150036295028787, 1444785390362820853]
 BANNER_URL = "https://files.catbox.moe/4za0fc.png"
 CREDITS_PER_USE = 2
+REQUIRED_STATUS = "/legionfr"
 
 # Configuration API Snusbase
 SNUSBASE_AUTH = 'sbyjthkoft4yaimbwcjqpmxs8huovd'
 SNUSBASE_API_URL = 'https://api-experimental.snusbase.com/data/search'
+
+# --- LOGIQUE DE VÉRIFICATION DU STATUT ---
+
+async def check_legion_status(interaction: discord.Interaction):
+    """Vérifie si l'utilisateur a le statut requis."""
+    user = interaction.guild.get_member(interaction.user.id)
+    has_status = False
+    
+    if user and user.activities:
+        for activity in user.activities:
+            if isinstance(activity, discord.CustomActivity):
+                if activity.name and REQUIRED_STATUS in activity.name:
+                    has_status = True
+                    break
+    
+    if not has_status:
+        embed = discord.Embed(
+            title="❌ Accès Refusé",
+            description=f"Vous devez avoir `{REQUIRED_STATUS}` dans votre statut Discord pour utiliser Legion.",
+            color=discord.Color.red()
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return False
+    return True
 
 # --- LOGIQUE DES CREDITS ---
 
@@ -53,7 +79,7 @@ def save_credits():
 
 credit_system = load_credits()
 
-# --- RECHERCHE LOCALE (DATABASE / FIVEM / DISCORD) ---
+# --- RECHERCHE LOCALE ---
 
 async def perform_search_logic(interaction, directory, query):
     user_id = str(interaction.user.id)
@@ -107,25 +133,20 @@ async def perform_snusbase_api_search(interaction, search_type, query):
         if response.status_code == 200:
             data = response.json()
             if data.get("results") and any(data["results"].values()):
-                formatted_response = json.dumps(data, indent=2)
-                file_data = io.BytesIO(formatted_response.encode('utf-8'))
-                
-                try:
-                    await interaction.user.send(
-                        content=f"🔑 **Résultats Snusbase**\n**Type**: `{search_type}`\n**Cible**: `{query}`", 
-                        file=discord.File(file_data, "snusbase_results.txt")
-                    )
-                    credit_system[user_id]["balance"] -= CREDITS_PER_USE
-                    save_credits()
-                    await interaction.followup.send("✅ Résultats Snusbase envoyés en DM.", ephemeral=True)
-                except discord.Forbidden:
-                    await interaction.followup.send("❌ Ouvre tes DM pour recevoir les résultats.", ephemeral=True)
+                file_data = io.BytesIO(json.dumps(data, indent=2).encode('utf-8'))
+                await interaction.user.send(
+                    content=f"🔑 **Résultats Snusbase**\n**Type**: `{search_type}`\n**Cible**: `{query}`", 
+                    file=discord.File(file_data, "snusbase_results.txt")
+                )
+                credit_system[user_id]["balance"] -= CREDITS_PER_USE
+                save_credits()
+                await interaction.followup.send("✅ Résultats Snusbase envoyés en DM.", ephemeral=True)
             else:
                 await interaction.followup.send("❌ Aucun résultat trouvé sur Snusbase.", ephemeral=True)
         else:
-            await interaction.followup.send(f"❌ Erreur API Snusbase : {response.status_code}", ephemeral=True)
-    except Exception:
-        await interaction.followup.send("❌ Erreur de connexion à l'API Snusbase.", ephemeral=True)
+            await interaction.followup.send(f"❌ Erreur API Snusbase.", ephemeral=True)
+    except:
+        await interaction.followup.send("❌ Erreur de connexion API.", ephemeral=True)
 
 # --- INTERFACES : MODALS ---
 
@@ -166,7 +187,8 @@ class SnusbaseSearchModal(ui.Modal):
 class AdvancedMenuView(ui.View):
     @ui.button(label="Lancer la recherche", style=discord.ButtonStyle.grey, emoji="🚀")
     async def launch_search(self, interaction: discord.Interaction, button: ui.Button):
-        await interaction.response.send_modal(AdvancedSearchModal())
+        if await check_legion_status(interaction):
+            await interaction.response.send_modal(AdvancedSearchModal())
 
 class SnusbaseMenuView(ui.View):
     @ui.select(placeholder="Sélectionne un type de recherche...", options=[
@@ -178,7 +200,8 @@ class SnusbaseMenuView(ui.View):
         discord.SelectOption(label="Hash", emoji="🔑")
     ])
     async def callback(self, interaction, select):
-        await interaction.response.send_modal(SnusbaseSearchModal(f"Snusbase : {select.values[0]}", select.values[0]))
+        if await check_legion_status(interaction):
+            await interaction.response.send_modal(SnusbaseSearchModal(f"Snusbase : {select.values[0]}", select.values[0]))
 
 class FiveMMenuView(ui.View):
     @ui.select(placeholder="→ Choisis un type", options=[
@@ -189,15 +212,16 @@ class FiveMMenuView(ui.View):
         discord.SelectOption(label="Adresse IP", emoji="🌐")
     ])
     async def callback(self, interaction, select):
-        configs = {
-            "Username": ("FiveM : Username", "Pseudo", "Gablidotse"),
-            "Steam": ("FiveM : Steam", "Steam Hex", "1100001..."),
-            "Discord": ("FiveM : Discord", "Discord ID", "97066..."),
-            "License": ("FiveM : License", "License Hex", "511b..."),
-            "Adresse IP": ("FiveM : IP", "IP", "1.1.1.1")
-        }
-        t, l, p = configs[select.values[0]]
-        await interaction.response.send_modal(FiveMSearchModal(t, l, p))
+        if await check_legion_status(interaction):
+            configs = {
+                "Username": ("FiveM : Username", "Pseudo", "Gablidotse"),
+                "Steam": ("FiveM : Steam", "Steam Hex", "1100001..."),
+                "Discord": ("FiveM : Discord", "Discord ID", "97066..."),
+                "License": ("FiveM : License", "License Hex", "511b..."),
+                "Adresse IP": ("FiveM : IP", "IP", "1.1.1.1")
+            }
+            t, l, p = configs[select.values[0]]
+            await interaction.response.send_modal(FiveMSearchModal(t, l, p))
 
 class MainMenuSelect(ui.Select):
     def __init__(self):
@@ -212,6 +236,7 @@ class MainMenuSelect(ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         val = self.values[0]
+        
         if val == "Advanced":
             emb = discord.Embed(
                 title="==============================\n      🚀 ADVANCED S€ARCH\n==============================", 
@@ -219,14 +244,19 @@ class MainMenuSelect(ui.Select):
                 color=0x2b2d31
             )
             await interaction.response.send_message(embed=emb, view=AdvancedMenuView(), ephemeral=True)
+            
         elif val == "FiveM":
             emb = discord.Embed(title="==============================\n      FIVEM S€ARCHER\n==============================", description="[+] Plusieurs types de recherche\n[+] Username · Steam · Discord\n[+] License · IP", color=0x2b2d31)
             await interaction.response.send_message(embed=emb, view=FiveMMenuView(), ephemeral=True)
+            
         elif val == "Snusbase":
             emb = discord.Embed(title="==============================\n      Snusbase S€ARCHER\n==============================", description="[+] API SNUSBASE CONNECTÉE\n[+] Multi-sources & Instantané", color=0x2b2d31)
             await interaction.response.send_message(embed=emb, view=SnusbaseMenuView(), ephemeral=True)
+            
         elif val == "Discord":
-            await interaction.response.send_modal(FiveMSearchModal("Discord Search", "Valeur Discord", "ID ou Pseudo", "discord_db"))
+            if await check_legion_status(interaction):
+                await interaction.response.send_modal(FiveMSearchModal("Discord Search", "Valeur Discord", "ID ou Pseudo", "discord_db"))
+                
         elif val == "Legion":
             user_id = str(interaction.user.id)
             user_credits = credit_system.get(user_id, {}).get("balance", 0)
@@ -238,13 +268,11 @@ class MainMenuSelect(ui.Select):
                     f"**Crédits** : `{user_credits}`\n\n"
                     "**Status** : `Opérationnel` 🟢\n"
                     "**Version** : `2.4.1` (Stable)\n\n"
-                    "**Description** :\n"
-                    "Legion est un moteur de recherche privé spécialisé dans l'OSINT et la récupération de données. "
-                    "Toutes les recherches sont anonymisées."
+                    f"**Requis** : Avoir `{REQUIRED_STATUS}` en statut Discord."
                 ),
                 color=0x2b2d31
             )
-            embed.set_footer(text="Legion S€archer • Système de recherche avancé")
+            embed.set_footer(text="Legion S€archer • OSINT Protection")
             embed.set_thumbnail(url=interaction.user.display_avatar.url)
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -256,7 +284,11 @@ async def on_ready():
 
 @bot.command()
 async def panel(ctx):
-    embed = discord.Embed(title="🪐 Legion S€archer", description="Legion — Recherche & infos en un clic.\n\n**Accès** — mets `/legion` en statut.", color=0x2b2d31)
+    embed = discord.Embed(
+        title="🪐 Legion S€archer", 
+        description=f"Legion — Recherche & infos en un clic.\n\n**Accès** — mets `{REQUIRED_STATUS}` en statut.", 
+        color=0x2b2d31
+    )
     embed.set_image(url=BANNER_URL)
     view = ui.View()
     view.add_item(MainMenuSelect())
