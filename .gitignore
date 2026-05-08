@@ -1,0 +1,11 @@
+# Bases de données (Trop gros et privé)
+database/
+Fivemdb/
+discord_db/
+*.sql
+*.txt
+
+# Sécurité
+.env
+credit_system.json
+__pycache__/
