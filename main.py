@@ -22,7 +22,7 @@ bot.remove_command('help')
 
 # --- VARIABLES ET IDS ---
 AUTHORIZED_IDS = [1402199337240625193, 1445150036295028787, 1444785390362820853]
-BANNER_URL = "https://io.files.catbox.moe/u96y2u.png"
+BANNER_URL = "https://files.catbox.moe/4za0fc.png"
 CREDITS_PER_USE = 2
 
 # --- LOGIQUE DES CREDITS (TON CODE D'ORIGINE) ---
