@@ -3,3 +3,6 @@ requests
 pythonping
 chardet
 charset-normalizer
+aiofiles
+python-dotenv
+aiohttp
