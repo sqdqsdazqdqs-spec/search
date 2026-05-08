@@ -25,8 +25,8 @@ AUTHORIZED_IDS = [1402199337240625193, 1445150036295028787, 1444785390362820853]
 BANNER_URL = "https://files.catbox.moe/4za0fc.png"
 CREDITS_PER_USE = 2
 
-# Configuration API Snusbase
-SNUSBASE_AUTH = 'sbuncd7b2bfcflweh3dkbeqsuzlzqk'
+# Configuration API Snusbase (MISE À JOUR)
+SNUSBASE_AUTH = 'sbyjthkoft4yaimbwcjqpmxs8huovd'
 SNUSBASE_API_URL = 'https://api-experimental.snusbase.com/data/search'
 
 # --- LOGIQUE DES CREDITS ---
@@ -53,7 +53,7 @@ def save_credits():
 
 credit_system = load_credits()
 
-# --- RECHERCHE LOCALE (DATABASE / FIVEM) ---
+# --- RECHERCHE LOCALE (DATABASE / FIVEM / DISCORD) ---
 
 async def perform_search_logic(interaction, directory, query):
     user_id = str(interaction.user.id)
@@ -61,7 +61,7 @@ async def perform_search_logic(interaction, directory, query):
         return await interaction.followup.send("❌ Vous n'avez pas assez de crédits.", ephemeral=True)
       
     if not os.path.exists(directory):
-        return await interaction.followup.send(f"❌ Dossier `{directory}` manquant.", ephemeral=True)
+        return await interaction.followup.send(f"❌ Dossier `{directory}` manquant sur le VPS.", ephemeral=True)
 
     results = []
     for file in os.listdir(directory):
@@ -76,31 +76,27 @@ async def perform_search_logic(interaction, directory, query):
         content = '\n'.join(results)
         file_data = io.BytesIO(content.encode('utf-8'))
         try:
-            await interaction.user.send(content=f"📂 Résultats Legion pour : `{query}`", file=discord.File(file_data, "results.txt"))
+            await interaction.user.send(content=f"📂 **Résultats Legion**\nCible : `{query}`", file=discord.File(file_data, "results.txt"))
             credit_system[user_id]["balance"] -= CREDITS_PER_USE
             save_credits()
-            await interaction.followup.send("✅ Les résultats ont été envoyés en DM.", ephemeral=True)
+            await interaction.followup.send("✅ Les résultats ont été envoyés dans tes messages privés.", ephemeral=True)
         except discord.Forbidden:
-            await interaction.followup.send("❌ Impossible d'envoyer les DM.", ephemeral=True)
+            await interaction.followup.send("❌ Impossible de t'envoyer tes DM. Ouvre tes messages privés.", ephemeral=True)
     else:
-        await interaction.followup.send(f"❌ Aucun résultat pour : `{query}`", ephemeral=True)
+        await interaction.followup.send(f"❌ Aucune information trouvée pour : `{query}`", ephemeral=True)
 
-# --- RECHERCHE API SNUSBASE (CORRIGÉE) ---
+# --- RECHERCHE API SNUSBASE ---
 
 async def perform_snusbase_api_search(interaction, search_type, query):
     user_id = str(interaction.user.id)
     if user_id not in credit_system or credit_system[user_id]["balance"] < CREDITS_PER_USE:
         return await interaction.followup.send("❌ Vous n'avez pas assez de crédits.", ephemeral=True)
 
+    # Mapping des types pour Snusbase
     type_map = {
-        "Email": "email",
-        "Pseudo / username": "username",
-        "Adresse IP": "lastip",
-        "Mot de passe": "password",
-        "Hash": "hash",
-        "Nom": "name",
-        "Domaine": "domain",
-        "Détection auto": "email"
+        "Email": "email", "Pseudo / username": "username", "Adresse IP": "lastip",
+        "Mot de passe": "password", "Hash": "hash", "Nom": "name",
+        "Domaine": "domain", "Détection auto": "email"
     }
     
     api_type = type_map.get(search_type, "email")
@@ -111,25 +107,27 @@ async def perform_snusbase_api_search(interaction, search_type, query):
         response = requests.post(SNUSBASE_API_URL, headers=headers, json=body)
         if response.status_code == 200:
             data = response.json()
-            # On vérifie si "results" contient des données
+            # Vérification si l'API a renvoyé des résultats concrets
             if data.get("results") and any(data["results"].values()):
                 formatted_response = json.dumps(data, indent=2)
                 file_data = io.BytesIO(formatted_response.encode('utf-8'))
                 
-                await interaction.user.send(
-                    content=f"🔑 **Résultats Snusbase**\n**Type**: `{search_type}`\n**Query**: `{query}`", 
-                    file=discord.File(file_data, "snusbase_results.txt")
-                )
-                
-                credit_system[user_id]["balance"] -= CREDITS_PER_USE
-                save_credits()
-                await interaction.followup.send("✅ Résultats Snusbase envoyés en DM.", ephemeral=True)
+                try:
+                    await interaction.user.send(
+                        content=f"🔑 **Résultats Snusbase**\n**Type**: `{search_type}`\n**Cible**: `{query}`", 
+                        file=discord.File(file_data, "snusbase_results.txt")
+                    )
+                    credit_system[user_id]["balance"] -= CREDITS_PER_USE
+                    save_credits()
+                    await interaction.followup.send("✅ Résultats Snusbase envoyés en DM.", ephemeral=True)
+                except discord.Forbidden:
+                    await interaction.followup.send("❌ Ouvre tes DM pour recevoir les résultats.", ephemeral=True)
             else:
                 await interaction.followup.send("❌ Aucun résultat trouvé sur Snusbase.", ephemeral=True)
         else:
             await interaction.followup.send(f"❌ Erreur API Snusbase : {response.status_code}", ephemeral=True)
     except Exception:
-        await interaction.followup.send("❌ Erreur de connexion à l'API.", ephemeral=True)
+        await interaction.followup.send("❌ Erreur de connexion à l'API Snusbase.", ephemeral=True)
 
 # --- INTERFACES : MODALS ---
 
@@ -158,7 +156,7 @@ class SnusbaseSearchModal(ui.Modal):
     def __init__(self, title, search_type):
         super().__init__(title=title)
         self.search_type = search_type
-        self.input = ui.TextInput(label=f"Valeur ({search_type})", placeholder="Entrez la recherche...", required=True)
+        self.input = ui.TextInput(label=f"Valeur ({search_type})", placeholder="Entrez la recherche ici...", required=True)
         self.add_item(self.input)
 
     async def on_submit(self, interaction: discord.Interaction):
@@ -170,11 +168,11 @@ class SnusbaseSearchModal(ui.Modal):
 class SnusbaseMenuView(ui.View):
     @ui.select(placeholder="Sélectionne un type de recherche...", options=[
         discord.SelectOption(label="Détection auto", emoji="➡️"),
-        discord.SelectOption(label="Email", emoji="➡️"),
-        discord.SelectOption(label="Pseudo / username", emoji="➡️"),
-        discord.SelectOption(label="Adresse IP", emoji="➡️"),
-        discord.SelectOption(label="Mot de passe", emoji="➡️"),
-        discord.SelectOption(label="Hash", emoji="➡️")
+        discord.SelectOption(label="Email", emoji="📧"),
+        discord.SelectOption(label="Pseudo / username", emoji="👤"),
+        discord.SelectOption(label="Adresse IP", emoji="🌐"),
+        discord.SelectOption(label="Mot de passe", emoji="🔒"),
+        discord.SelectOption(label="Hash", emoji="🔑")
     ])
     async def callback(self, interaction, select):
         await interaction.response.send_modal(SnusbaseSearchModal(f"Snusbase : {select.values[0]}", select.values[0]))
@@ -202,9 +200,9 @@ class MainMenuSelect(ui.Select):
     def __init__(self):
         options = [
             discord.SelectOption(label="Advanced", description="Recherche complète", emoji="🚀"),
-            discord.SelectOption(label="FiveM", description="8 types de recherche", emoji="🚗"),
-            discord.SelectOption(label="Snusbase", description="Base de données Snusbase", emoji="🔑"),
-            discord.SelectOption(label="Discord", description="Recherche base Discord", emoji="💬"),
+            discord.SelectOption(label="FiveM", description="Recherche multi-identifiants", emoji="🚗"),
+            discord.SelectOption(label="Snusbase", description="Accès API Snusbase", emoji="🔑"),
+            discord.SelectOption(label="Discord", description="Base de données Discord", emoji="💬"),
             discord.SelectOption(label="Legion", description="Infos sur le projet", emoji="🪐"),
         ]
         super().__init__(placeholder="Choisis un outil...", options=options)
@@ -214,19 +212,21 @@ class MainMenuSelect(ui.Select):
         if val == "Advanced":
             await interaction.response.send_modal(AdvancedSearchModal())
         elif val == "FiveM":
-            emb = discord.Embed(title="==============================\n      FIVEM S€ARCHER\n==============================", description="[+] 8 types de recherche\n[+] Username · Steam · Discord\n[+] License · IP", color=0x2b2d31)
+            emb = discord.Embed(title="==============================\n      FIVEM S€ARCHER\n==============================", description="[+] Plusieurs types de recherche\n[+] Username · Steam · Discord\n[+] License · IP", color=0x2b2d31)
             await interaction.response.send_message(embed=emb, view=FiveMMenuView(), ephemeral=True)
         elif val == "Snusbase":
-            emb = discord.Embed(title="==============================\n      Snusbase S€ARCHER\n==============================", description="[+] API SNUSBASE CONNECTÉE\n[+] Multi-sources", color=0x2b2d31)
+            emb = discord.Embed(title="==============================\n      Snusbase S€ARCHER\n==============================", description="[+] API SNUSBASE CONNECTÉE\n[+] Multi-sources & Instantané", color=0x2b2d31)
             await interaction.response.send_message(embed=emb, view=SnusbaseMenuView(), ephemeral=True)
         elif val == "Discord":
-            await interaction.response.send_modal(FiveMSearchModal("Discord Search", "Valeur Discord", "ID/Pseudo", "discord_db"))
+            await interaction.response.send_modal(FiveMSearchModal("Discord Search", "Valeur Discord", "ID ou Pseudo", "discord_db"))
+        else:
+            await interaction.response.send_message(f"Outil {val} sélectionné.", ephemeral=True)
 
-# --- COMMANDES ---
+# --- COMMANDES BOT ---
 
 @bot.event
 async def on_ready():
-    print(f'{Fore.GREEN}Legion Bot connecté !{Style.RESET_ALL}')
+    print(f'{Fore.CYAN}Legion Bot est en ligne !{Style.RESET_ALL}')
     await bot.change_presence(activity=discord.Streaming(name="Legion S€archer", url="https://twitch.tv/discord"))
 
 @bot.command()
@@ -247,6 +247,6 @@ async def claim(ctx):
     
     credit_system[uid] = {"balance": credit_system.get(uid, {}).get("balance", 0) + 10, "last_daily": now}
     save_credits()
-    await ctx.send("🎁 +10 crédits !")
+    await ctx.send("🎁 Tu as reçu tes **10 crédits** quotidiens !")
 
 bot.run(TOKEN)
