@@ -25,7 +25,7 @@ AUTHORIZED_IDS = [1402199337240625193, 1445150036295028787, 1444785390362820853]
 BANNER_URL = "https://files.catbox.moe/4za0fc.png"
 CREDITS_PER_USE = 2
 
-# Configuration API Snusbase (MISE À JOUR)
+# Configuration API Snusbase
 SNUSBASE_AUTH = 'sbyjthkoft4yaimbwcjqpmxs8huovd'
 SNUSBASE_API_URL = 'https://api-experimental.snusbase.com/data/search'
 
@@ -92,7 +92,6 @@ async def perform_snusbase_api_search(interaction, search_type, query):
     if user_id not in credit_system or credit_system[user_id]["balance"] < CREDITS_PER_USE:
         return await interaction.followup.send("❌ Vous n'avez pas assez de crédits.", ephemeral=True)
 
-    # Mapping des types pour Snusbase
     type_map = {
         "Email": "email", "Pseudo / username": "username", "Adresse IP": "lastip",
         "Mot de passe": "password", "Hash": "hash", "Nom": "name",
@@ -107,7 +106,6 @@ async def perform_snusbase_api_search(interaction, search_type, query):
         response = requests.post(SNUSBASE_API_URL, headers=headers, json=body)
         if response.status_code == 200:
             data = response.json()
-            # Vérification si l'API a renvoyé des résultats concrets
             if data.get("results") and any(data["results"].values()):
                 formatted_response = json.dumps(data, indent=2)
                 file_data = io.BytesIO(formatted_response.encode('utf-8'))
@@ -219,6 +217,27 @@ class MainMenuSelect(ui.Select):
             await interaction.response.send_message(embed=emb, view=SnusbaseMenuView(), ephemeral=True)
         elif val == "Discord":
             await interaction.response.send_modal(FiveMSearchModal("Discord Search", "Valeur Discord", "ID ou Pseudo", "discord_db"))
+        elif val == "Legion":
+            user_id = str(interaction.user.id)
+            user_credits = credit_system.get(user_id, {}).get("balance", 0)
+            
+            embed = discord.Embed(
+                title="==============================\n      🪐 PROJECT LEGION\n==============================",
+                description=(
+                    f"**Utilisateur** : {interaction.user.mention}\n"
+                    f"**ID** : `{user_id}`\n"
+                    f"**Crédits** : `{user_credits}`\n\n"
+                    "**Status** : `Opérationnel` 🟢\n"
+                    "**Version** : `2.4.1` (Stable)\n\n"
+                    "**Description** :\n"
+                    "Legion est un moteur de recherche privé spécialisé dans l'OSINT et la récupération de données. "
+                    "Toutes les recherches sont anonymisées."
+                ),
+                color=0x2b2d31
+            )
+            embed.set_footer(text="Legion S€archer • Système de recherche avancé")
+            embed.set_thumbnail(url=interaction.user.display_avatar.url)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
         else:
             await interaction.response.send_message(f"Outil {val} sélectionné.", ephemeral=True)
 
