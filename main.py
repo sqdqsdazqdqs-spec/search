@@ -17,7 +17,7 @@ colorama.init()
 TOKEN = os.getenv('DISCORD_TOKEN') or 'TON_TOKEN_ICI'
 
 intents = discord.Intents.all()
-intents.presences = True # IMPORTANT : Requis pour lire les statuts
+intents.presences = True 
 bot = commands.Bot(command_prefix='!', intents=intents)
 bot.remove_command('help')
 
@@ -51,7 +51,11 @@ async def check_legion_status(interaction: discord.Interaction):
             description=f"Vous devez avoir `{REQUIRED_STATUS}` dans votre statut Discord pour utiliser Legion.",
             color=discord.Color.red()
         )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        # On utilise try/except au cas où l'interaction a déjà été répondue
+        try:
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        except:
+            await interaction.followup.send(embed=embed, ephemeral=True)
         return False
     return True
 
@@ -150,14 +154,28 @@ async def perform_snusbase_api_search(interaction, search_type, query):
 
 # --- INTERFACES : MODALS ---
 
-class AdvancedSearchModal(ui.Modal, title='Recherche avancée'):
-    prenom = ui.TextInput(label='Prénom', placeholder='Jean', required=False)
-    nom = ui.TextInput(label='Nom', placeholder='Dupont', required=False)
-    city = ui.TextInput(label='Ville / Code-Postal', placeholder='Paris 75001', required=False)
+class AdvancedSearchModal(ui.Modal):
+    def __init__(self, title, type_search):
+        super().__init__(title=title)
+        self.type_search = type_search
+        
+        if type_search == "name":
+            self.prenom = ui.TextInput(label='Prénom', placeholder='Jean', required=True)
+            self.nom = ui.TextInput(label='Nom', placeholder='Dupont', required=True)
+            self.add_item(self.prenom)
+            self.add_item(self.nom)
+        elif type_search == "city":
+            self.city = ui.TextInput(label='Ville / Code-Postal', placeholder='Paris 75001', required=True)
+            self.add_item(self.city)
+        else:
+            self.full = ui.TextInput(label='Recherche Complète', placeholder='Prénom Nom Ville...', required=True)
+            self.add_item(self.full)
 
     async def on_submit(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
-        query = f"{self.prenom.value} {self.nom.value} {self.city.value}".strip()
+        if self.type_search == "name": query = f"{self.prenom.value} {self.nom.value}"
+        elif self.type_search == "city": query = self.city.value
+        else: query = self.full.value
         await perform_search_logic(interaction, "database", query)
 
 class FiveMSearchModal(ui.Modal):
@@ -185,10 +203,16 @@ class SnusbaseSearchModal(ui.Modal):
 # --- INTERFACES : VIEWS ---
 
 class AdvancedMenuView(ui.View):
-    @ui.button(label="Lancer la recherche", style=discord.ButtonStyle.grey, emoji="🚀")
-    async def launch_search(self, interaction: discord.Interaction, button: ui.Button):
+    @ui.select(placeholder="→ Choisis un filtre de recherche", options=[
+        discord.SelectOption(label="Recherche par Nom", value="name", emoji="👤"),
+        discord.SelectOption(label="Recherche par Ville", value="city", emoji="🏙️"),
+        discord.SelectOption(label="Full Search", value="full", emoji="🔍")
+    ])
+    async def callback(self, interaction: discord.Interaction, select: ui.Select):
         if await check_legion_status(interaction):
-            await interaction.response.send_modal(AdvancedSearchModal())
+            val = select.values[0]
+            titles = {"name": "Nom / Prénom", "city": "Ville / CP", "full": "Recherche Complète"}
+            await interaction.response.send_modal(AdvancedSearchModal(titles[val], val))
 
 class SnusbaseMenuView(ui.View):
     @ui.select(placeholder="Sélectionne un type de recherche...", options=[
@@ -235,6 +259,10 @@ class MainMenuSelect(ui.Select):
         super().__init__(placeholder="Choisis un outil...", options=options)
 
     async def callback(self, interaction: discord.Interaction):
+        # VÉRIFICATION GLOBALE DU STATUT AVANT D'OUVRIR N'IMPORTE QUELLE OPTION
+        if not await check_legion_status(interaction):
+            return
+
         val = self.values[0]
         
         if val == "Advanced":
@@ -254,8 +282,7 @@ class MainMenuSelect(ui.Select):
             await interaction.response.send_message(embed=emb, view=SnusbaseMenuView(), ephemeral=True)
             
         elif val == "Discord":
-            if await check_legion_status(interaction):
-                await interaction.response.send_modal(FiveMSearchModal("Discord Search", "Valeur Discord", "ID ou Pseudo", "discord_db"))
+            await interaction.response.send_modal(FiveMSearchModal("Discord Search", "Valeur Discord", "ID ou Pseudo", "discord_db"))
                 
         elif val == "Legion":
             user_id = str(interaction.user.id)
