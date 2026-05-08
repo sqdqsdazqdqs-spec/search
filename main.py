@@ -661,4 +661,4 @@ async def balance(ctx):
 
         
 save_credits()
-bot.run(TOKEN)
+TOKEN = os.getenv('DISCORD_TOKEN')
